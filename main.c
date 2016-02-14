@@ -122,7 +122,6 @@ int main()
 				__ASM("nop");
 				__ASM("nop");
 				__ASM("nop");
-				__ASM("nop");
 				LPC_GPIO0->FIOCLR = 1<<5;
 				_delay_ms(10);			
 			}
