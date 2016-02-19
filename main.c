@@ -65,7 +65,6 @@ void dbg_init()
 int main()
 {	
 	setpll();	// 100MHz
-	
 
 	LPC_SC->PCONP 		|= 	(1<<15);	//power up GPIO
 	LPC_GPIO3->FIODIR 	|= 	(1<<25);	//set P3.25 to output mode - LED1

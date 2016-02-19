@@ -26,16 +26,17 @@ extern "C" {
 }
 
 long x, y;   	//for touch
-//uint16_t DAC_value = 0;
+uint16_t pulseFreq = 1000;
 
 button* pObject;
 void (button::*pMember)(int8_t);
 
 std::unique_ptr<button> DACbutton;
 std::unique_ptr<button> calButton;
-std::unique_ptr<button> pulseWidthButton;
+std::unique_ptr<button> pulseWidthButton;	//can be implemented? 10-80ns
 std::unique_ptr<button> pulseCountButton;
-std::unique_ptr<button> FireButton;
+std::unique_ptr<button> measureButton;
+std::unique_ptr<button> fireButton;
 status main_status;
 
 void set_status_idle()
@@ -53,9 +54,9 @@ void set_status_waiting()
 	main_status.set(status::Waiting);
 }
 
-void fire()
+void measure()
 {
-	printf("in fire()\n");
+	printf("in measure()\n");
 	printf("calling tdc_measure()\n");
 	uint32_t time_measured =  tdc_measure();
 
@@ -64,10 +65,46 @@ void fire()
     GUI_Text(200, 200, (uint8_t*)buffer, Black, BG);
 }
 
+// void __attribute__( ( noinline, long_call ) ) virtualFire()
+// {
+// 	LPC_GPIO0->FIOSET = 1<<5;
+// 		__ASM("nop");
+// 		__ASM("nop");
+// 		__ASM("nop");
+// 	LPC_GPIO0->FIOCLR = 1<<5;
+// }
+// 00002578 <virtualFire()>:
+//     2578:	4b03      	ldr	r3, [pc, #12]	; (2588 <virtualFire()+0x10>)
+//     257a:	2220      	movs	r2, #32
+//     257c:	619a      	str	r2, [r3, #24]
+//     257e:	bf00      	nop
+//     2580:	bf00      	nop
+//     2582:	bf00      	nop
+//     2584:	61da      	str	r2, [r3, #28]
+//     2586:	4770      	bx	lr
+//     2588:	2009c000 	.word	0x2009c000	//lower first OMG!
+
+uint16_t virtualFire[] = { 0x4B03, 0x2220, 0x619A, 0xBF00, 0xBF00, 0xBF00, 0x61DA, 0x4770, 0xC000, 0x2009 };
+
+typedef void (*funcPtr)(void);
+
+void fire()
+{
+	funcPtr virtualFirePtr =  (funcPtr) (((uint32_t) virtualFire)+1);
+	
+	set_status_transmitting();
+	asm volatile("cpsid i");	//disable all interrupts
+	for(int i=0; i<pulseCountButton->value; i++)
+	{
+		virtualFirePtr();
+	}
+	asm volatile("cpsie i");	//re-enable interrupts
+	set_status_idle();
+}
+
 void DAC_set(uint16_t value)
 {
 	LPC_DAC->DACR = (value & 0b0000001111111111)<<6;	//get rid of upper 6bits and shift 
-	//DAC_value = (value & 0b0000001111111111);
 }
 
 uint16_t DAC_get()
@@ -106,7 +143,9 @@ void drawControls()
 	
 	calButton->show();
 	DACbutton->show();
-	FireButton->show();
+	pulseCountButton->show();
+	fireButton->show();
+	measureButton->show();
 
 }
 
@@ -117,19 +156,28 @@ void init()
 	_delay_ms(100);
 	tdc_init();
 
-	calButton.reset(new button("Cal.", 90, 180, &TouchPanel_Calibrate));
-	calButton->sizeX = 65;
-	calButton->YlabelOffset = 16;
-
 	DACbutton.reset(new button("DAC", 10, 180));
 	DACbutton->sizeX = 65;
 	DACbutton->YlabelOffset = 16;
 	DACbutton->value = DAC_get();
 	DACbutton->roll_factor = 10;
 
-	FireButton.reset(new button("Fire", 90, 30, &fire));
-	FireButton->sizeX = 65;
-	FireButton->YlabelOffset = 16;
+	calButton.reset(new button("Cal.", 90, 180, &TouchPanel_Calibrate));
+	calButton->sizeX = 65;
+	calButton->YlabelOffset = 16;
+
+	pulseCountButton.reset(new button("Pulses", 10, 105));
+	pulseCountButton->sizeX = 65;
+	pulseCountButton->YlabelOffset = 16;
+	pulseCountButton->value = 1;
+
+	fireButton.reset(new button("Fire", 90, 105, &fire));
+	fireButton->sizeX = 65;
+	fireButton->YlabelOffset = 16;
+
+	measureButton.reset(new button("Measure", 90, 30, &measure));
+	measureButton->sizeX = 65;
+	measureButton->YlabelOffset = 16;
 
 
 	drawControls();
