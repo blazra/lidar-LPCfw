@@ -61,7 +61,7 @@ void measure()
 	uint32_t time_measured =  tdc_measure();
 
 	char buffer[20];
-    sprintf(buffer,"%10d ps", time_measured);
+    sprintf(buffer,"%10u ps", time_measured);
     GUI_Text(200, 200, (uint8_t*)buffer, Black, BG);
 }
 
@@ -84,19 +84,32 @@ void measure()
 //     2586:	4770      	bx	lr
 //     2588:	2009c000 	.word	0x2009c000	//lower first OMG!
 
-uint16_t virtualFire[] = { 0x4B03, 0x2220, 0x619A, 0xBF00, 0xBF00, 0xBF00, 0x61DA, 0x4770, 0xC000, 0x2009 };
-
 typedef void (*funcPtr)(void);
 
 void fire()
 {
-	funcPtr virtualFirePtr =  (funcPtr) (((uint32_t) virtualFire)+1);
+
+	uint16_t pulseGen[15] = { 0x4B03, 0x2220, 0x619A, 0xBF00, 0xBF00, 0xBF00, 0x61DA, 0x4770, 0xC000, 0x2009 };
+	uint8_t nopCount = pulseWidthButton->value/10;
+	
+	if(nopCount > 8)
+	{
+		printf("bad pulse width value\n");
+		return;
+	}
+	
+	pulseGen[3+nopCount] = 0x61DA;
+	pulseGen[4+nopCount] = 0x4770;
+
+
+	funcPtr pulseGenPtr =  (funcPtr) (((uint32_t) pulseGen)+1);
 	
 	set_status_transmitting();
 	asm volatile("cpsid i");	//disable all interrupts
 	for(int i=0; i<pulseCountButton->value; i++)
 	{
-		virtualFirePtr();
+		pulseGenPtr();
+		_delay_ms((1000/pulseFreq));
 	}
 	asm volatile("cpsie i");	//re-enable interrupts
 	set_status_idle();
@@ -144,6 +157,7 @@ void drawControls()
 	calButton->show();
 	DACbutton->show();
 	pulseCountButton->show();
+	pulseWidthButton->show();
 	fireButton->show();
 	measureButton->show();
 
@@ -171,7 +185,14 @@ void init()
 	pulseCountButton->YlabelOffset = 16;
 	pulseCountButton->value = 1;
 
-	fireButton.reset(new button("Fire", 90, 105, &fire));
+	pulseWidthButton.reset(new button("Width", 90, 105));
+	pulseWidthButton->sizeX = 65;
+	pulseWidthButton->YlabelOffset = 16;
+	pulseWidthButton->value = 10;
+	pulseWidthButton->roll_factor = 10;
+
+
+	fireButton.reset(new button("Fire", 10, 30, &fire));
 	fireButton->sizeX = 65;
 	fireButton->YlabelOffset = 16;
 
